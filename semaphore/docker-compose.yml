@@ -1,0 +1,78 @@
+---
+# Semaphore UI - Ansible / Task Automation
+# Bind: 10.10.0.2:3000 (internal mgmt network only)
+# Secrets: loaded from .env (env_file) - no plaintext secrets here
+# Persistence: ./data, ./db
+# Run: docker compose --env-file .env up -d
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      POSTGRES_USER: ${SEMAPHORE_DB_USER}
+      POSTGRES_PASSWORD: ${SEMAPHORE_DB_PASS}
+      POSTGRES_DB: ${SEMAPHORE_DB_NAME}
+    volumes:
+      - ./db:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${SEMAPHORE_DB_USER} -d ${SEMAPHORE_DB_NAME}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - semaphore-internal
+
+  semaphore:
+    image: semaphoreui/semaphore:latest
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      SEMAPHORE_DB_DIALECT: postgres
+      SEMAPHORE_DB_HOST: db
+      SEMAPHORE_DB_PORT: "5432"
+      SEMAPHORE_DB_USER: ${SEMAPHORE_DB_USER}
+      SEMAPHORE_DB_PASS: ${SEMAPHORE_DB_PASS}
+      SEMAPHORE_DB: ${SEMAPHORE_DB_NAME}
+      SEMAPHORE_PLAYBOOK_PATH: /tmp/semaphore
+      SEMAPHORE_ADMIN: ${SEMAPHORE_ADMIN}
+      SEMAPHORE_ADMIN_PASSWORD: ${SEMAPHORE_ADMIN_PASSWORD}
+      SEMAPHORE_ADMIN_NAME: ${SEMAPHORE_ADMIN_NAME}
+      SEMAPHORE_ADMIN_EMAIL: ${SEMAPHORE_ADMIN_EMAIL}
+      SEMAPHORE_ACCESS_KEY_ENCRYPTION: ${SEMAPHORE_ACCESS_KEY}
+      SEMAPHORE_CONFIG_PATH: /etc/semaphore
+    ports:
+      - "${SEMAPHORE_BIND_HOST}:${SEMAPHORE_BIND_PORT}:3000"
+    volumes:
+      - ./data:/home/semaphore
+      - ./tmp:/tmp/semaphore
+      - ./config:/etc/semaphore
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3000/api/ping",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    networks:
+      - semaphore-internal
+
+networks:
+  semaphore-internal:
+    driver: bridge
+    internal: false

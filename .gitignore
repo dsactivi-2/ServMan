@@ -1,0 +1,20 @@
+# Secrets and env files
+**/.env
+**/.env.*
+!.env.example
+
+# Database and runtime state
+semaphore/db/
+semaphore/data/
+semaphore/tmp/
+semaphore/backups/
+semaphore/config/config.json
+
+# Logs and artifacts
+agent/logs/
+shared/artifacts/
+*.log
+
+# Local/editor/system
+.DS_Store
+Thumbs.db
