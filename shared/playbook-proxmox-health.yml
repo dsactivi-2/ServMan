@@ -1,0 +1,27 @@
+---
+- name: Proxmox Node Health Verification
+  hosts: pve
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Verify Proxmox and core services
+      ansible.builtin.shell: |
+        set -e
+        pveversion | head -n 1
+        systemctl is-active pveproxy pvedaemon pvestatd pve-cluster docker tailscaled ssh
+        qm list
+        pvesm status
+      register: health_out
+      changed_when: false
+
+    - name: Verify firewall policy for 8006
+      ansible.builtin.shell: |
+        iptables -S INPUT | sed -n '1,25p'
+      register: fw_out
+      changed_when: false
+
+    - name: Print health summary
+      ansible.builtin.debug:
+        msg:
+          - "{{ health_out.stdout_lines }}"
+          - "{{ fw_out.stdout_lines }}"

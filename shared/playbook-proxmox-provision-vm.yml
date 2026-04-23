@@ -1,0 +1,40 @@
+---
+- name: Proxmox VM Provisioning from template
+  hosts: pve
+  become: true
+  gather_facts: false
+  vars:
+    vmid: "{{ target_vmid | default('120') }}"
+    vm_name: "{{ target_vm_name | default('app-auto-01') }}"
+    template_id: "{{ target_template_id | default('9000') }}"
+    vm_memory: "{{ target_vm_memory | default('4096') }}"
+    vm_cores: "{{ target_vm_cores | default('2') }}"
+    vm_storage: "{{ target_vm_storage | default('local') }}"
+    vm_bridge: "{{ target_vm_bridge | default('vmbr0') }}"
+  tasks:
+    - name: Check if VM already exists
+      ansible.builtin.shell: "qm status {{ vmid }}"
+      register: vm_status
+      failed_when: false
+      changed_when: false
+
+    - name: Clone VM from template if missing
+      ansible.builtin.shell: "qm clone {{ template_id }} {{ vmid }} --name {{ vm_name }} --full 1 --storage {{ vm_storage }}"
+      when: vm_status.rc != 0
+
+    - name: Apply VM baseline settings
+      ansible.builtin.shell: "qm set {{ vmid }} --memory {{ vm_memory }} --cores {{ vm_cores }} --onboot 1 --ipconfig0 ip=dhcp --net0 virtio,bridge={{ vm_bridge }}"
+
+    - name: Start VM
+      ansible.builtin.shell: "qm start {{ vmid }}"
+      register: vm_start
+      failed_when: false
+
+    - name: Show resulting VM state
+      ansible.builtin.shell: "qm status {{ vmid }} && qm config {{ vmid }} | sed -n '1,30p'"
+      register: vm_result
+      changed_when: false
+
+    - name: Print VM result
+      ansible.builtin.debug:
+        msg: "{{ vm_result.stdout_lines }}"
